@@ -85,3 +85,7 @@ This product uses the [TMDB](https://www.themoviedb.org) API but is not endorsed
 or certified by TMDB. Streaming-availability data is provided by JustWatch.
 Network and provider logos are trademarks of their respective owners and are
 used here for identification only.
+
+## License
+
+Released under the [MIT License](LICENSE).
