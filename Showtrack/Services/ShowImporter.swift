@@ -13,7 +13,8 @@ struct ShowImporter {
     /// v5: exact-name match first (keep AMC/AMC+/NBC/Peacock distinct).
     /// v6: negated network wordmark tile when no provider tile (FOX, CBS).
     /// v7: exact-only provider match (FOX≠Fox One; HBO now uses its wordmark).
-    static let metadataVersion = 7
+    /// v8: brand alias so "Prime Video" network matches "Amazon Prime Video" tile.
+    static let metadataVersion = 8
 
     let context: ModelContext
 
@@ -197,13 +198,21 @@ struct ShowImporter {
         return (normalizedProviderName(base), rank)
     }
 
+    /// Brand aliases for names that differ between a network and its provider
+    /// tile. TMDB lists Amazon's network as "Prime Video" but the square provider
+    /// tile as "Amazon Prime Video"; exact matching needs them to canonicalize to
+    /// the same key. (The buy/rent store "Amazon Video" is intentionally distinct.)
+    private static let brandAliases = ["amazonprimevideo": "primevideo"]
+
     /// Normalize provider/network names for comparison: lowercase, "plus" → "+",
-    /// strip spaces/punctuation. So "Paramount Plus" == "Paramount+".
+    /// strip spaces/punctuation, then apply brand aliases. So "Paramount Plus" ==
+    /// "Paramount+", and "Amazon Prime Video" == "Prime Video".
     private static func normalizedProviderName(_ name: String) -> String {
-        name.lowercased()
+        let key = name.lowercased()
             .replacingOccurrences(of: "plus", with: "+")
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "-", with: "")
+        return brandAliases[key] ?? key
     }
 
     /// Prefer the season of the last/next aired episode; fall back to the
