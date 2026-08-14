@@ -3,7 +3,7 @@ import SwiftUI
 /// A titled, horizontally-scrolling row of show cards.
 struct ShelfView: View {
     let title: String
-    let episodes: [Episode]
+    let groups: [EpisodeGroup]
     let emptyMessage: String
     var showsAirDate: Bool = false
 
@@ -12,28 +12,31 @@ struct ShelfView: View {
         GridItem(.flexible(), spacing: 16)
     ]
 
+    /// Raw episode count (collapsed posters still count every episode).
+    private var episodeCount: Int { groups.reduce(0) { $0 + $1.count } }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(title)
                     .font(.title2.bold())
                 Spacer()
-                if !episodes.isEmpty {
-                    CountPill(count: episodes.count)
+                if !groups.isEmpty {
+                    CountPill(count: episodeCount)
                 }
             }
 
-            if episodes.isEmpty {
+            if groups.isEmpty {
                 Text(emptyMessage)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } else {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 16) {
-                    ForEach(episodes) { episode in
+                    ForEach(groups) { group in
                         NavigationLink {
-                            EpisodeDetailView(episode: episode)
+                            EpisodeDetailView(episodes: group.episodes)
                         } label: {
-                            ShowCardView(episode: episode, showsAirDate: showsAirDate)
+                            ShowCardView(group: group, showsAirDate: showsAirDate)
                         }
                         .buttonStyle(.plain)
                     }

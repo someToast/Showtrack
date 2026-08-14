@@ -206,8 +206,9 @@ struct ShowImporter {
 
     /// Normalize provider/network names for comparison: lowercase, "plus" → "+",
     /// strip spaces/punctuation, then apply brand aliases. So "Paramount Plus" ==
-    /// "Paramount+", and "Amazon Prime Video" == "Prime Video".
-    private static func normalizedProviderName(_ name: String) -> String {
+    /// "Paramount+", and "Amazon Prime Video" == "Prime Video". Also the key used
+    /// by `GeneratedTile` to look up authored tile colors.
+    static func normalizedProviderName(_ name: String) -> String {
         let key = name.lowercased()
             .replacingOccurrences(of: "plus", with: "+")
             .replacingOccurrences(of: " ", with: "")

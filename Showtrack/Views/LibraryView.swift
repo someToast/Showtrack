@@ -98,7 +98,7 @@ struct LibraryView: View {
     private func landscapeThumb(_ show: Show) -> some View {
         let url = TMDBImage.backdrop(show.backdropPath, size: "w300")
             ?? TMDBImage.poster(show.posterPath, size: "w300")
-        return AsyncImage(url: url) { phase in
+        return CachedAsyncImage(url: url) { phase in
             switch phase {
             case .success(let image):
                 image.resizable().scaledToFill()

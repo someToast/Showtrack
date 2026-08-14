@@ -1,11 +1,135 @@
 import SwiftUI
 import SwiftData
 
-/// Content detail for a tapped episode: large image up top (episode still when
-/// available, otherwise the show's backdrop/poster), then show name, episode
-/// title, SnEn, provider, and synopsis.
+/// Detail for a tapped card. A single episode shows one page; a group of
+/// same-day episodes shows swipeable cards with hard stops at the first and last.
 struct EpisodeDetailView: View {
+    let episodes: [Episode]
+
+    var body: some View {
+        Group {
+            if episodes.isEmpty {
+                ContentUnavailableView("No episode", systemImage: "tv")
+            } else {
+                EpisodePager(episodes: episodes)
+            }
+        }
+        .navigationTitle(episodes.first?.show?.name ?? "Episode")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Horizontally-paged carousel over a group's episodes, hard-stopping at both
+/// ends. Pages load lazily (a `LazyHStack` in a paging `ScrollView`), so a large
+/// same-day group doesn't build and decode every episode's header image up
+/// front. The provider badge and pagination dots are pinned over the header
+/// image so they stay fixed while pages swipe behind them horizontally — but they
+/// still track the active page's vertical scroll, so pushing the content up
+/// carries them up too (sliding under the nav bar along with the header image).
+private struct EpisodePager: View {
+    let episodes: [Episode]
+    @State private var currentID: Int?
+    /// Vertical scroll offset (≤ 0) of each page, keyed by index.
+    @State private var offsets: [Int: CGFloat] = [:]
+
+    private var index: Int { currentID ?? 0 }
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
+                ForEach(episodes.indices, id: \.self) { i in
+                    EpisodeDetailPage(
+                        episode: episodes[i],
+                        pagePosition: episodes.count > 1 ? (i + 1, episodes.count) : nil
+                    ) { offset in
+                        offsets[i] = offset
+                    }
+                    .containerRelativeFrame(.horizontal)
+                    .id(i)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollTargetBehavior(.paging)
+        .scrollPosition(id: $currentID)
+        .scrollIndicators(.hidden)
+        .overlay(alignment: .top) {
+            HeaderBadges(
+                show: episodes.first?.show,
+                pageCount: episodes.count,
+                pageIndex: index
+            )
+            .offset(y: offsets[index] ?? 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // The overlay's top edge sits at the header image's top (just below
+            // the nav bar). Clipping there hides the badges as they scroll up past
+            // it, so they read as passing behind the bar.
+            .clipped()
+        }
+    }
+}
+
+/// Provider badge and (for a group) pagination dots, pinned over the header image
+/// band so they stay fixed while episode pages swipe behind them.
+private struct HeaderBadges: View {
+    let show: Show?
+    let pageCount: Int
+    let pageIndex: Int
+
+    var body: some View {
+        Color.clear
+            .frame(height: 220)
+            .overlay(alignment: .bottomLeading) {
+                if show?.providerLogoPath != nil || show?.providerName != nil {
+                    // Lower-left of the header image, 200% of the base badge size.
+                    ProviderBadge(
+                        logoPath: show?.providerLogoPath,
+                        name: show?.providerName,
+                        size: 48,
+                        isNetworkLogo: show?.providerIsNetworkLogo ?? false
+                    )
+                    .padding(12)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if pageCount > 1 {
+                    PaginationDots(count: pageCount, index: pageIndex)
+                        .padding(.bottom, 8)
+                }
+            }
+            .allowsHitTesting(false)
+    }
+}
+
+/// Page-indicator dots for the paged episode header.
+private struct PaginationDots: View {
+    let count: Int
+    let index: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<count, id: \.self) { i in
+                Circle()
+                    .fill(.white.opacity(i == index ? 0.95 : 0.4))
+                    .frame(width: 7, height: 7)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.black.opacity(0.35), in: Capsule())
+    }
+}
+
+/// One episode's detail page (header image + metadata), with pagination dots on
+/// the header when it's part of a multi-episode group.
+private struct EpisodeDetailPage: View {
     let episode: Episode
+    /// Position within a same-day group ("2 of 4"), or nil for single-episode
+    /// detail (no label shown).
+    var pagePosition: (number: Int, count: Int)? = nil
+    /// Reports vertical scroll offset (≤ 0, negative as content moves up) so the
+    /// pinned header badges can track it.
+    var onScroll: (CGFloat) -> Void = { _ in }
 
     private var show: Show? { episode.show }
 
@@ -16,10 +140,19 @@ struct EpisodeDetailView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     VStack(alignment: .leading, spacing: 4) {
-                        if let show {
-                            Text(show.name).font(.title2.bold())
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            if let show {
+                                Text(show.name).font(.title2.bold())
+                            }
+                            if let pagePosition {
+                                Spacer(minLength: 8)
+                                Text("\(pagePosition.number) of \(pagePosition.count)")
+                                    .font(.subheadline.weight(.medium))
+                                    .monospacedDigit()
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                        
+
                         HStack(spacing: 8) {
                             Text(episode.seasonEpisodeCode)
                                 .font(.callout.weight(.medium))
@@ -55,8 +188,11 @@ struct EpisodeDetailView: View {
             }
             .padding(.bottom, 24)
         }
-        .navigationTitle(show?.name ?? "Episode")
-        .navigationBarTitleDisplayMode(.inline)
+        .onScrollGeometryChange(for: CGFloat.self) { geo in
+            geo.contentOffset.y + geo.contentInsets.top
+        } action: { _, scrolled in
+            onScroll(-scrolled)
+        }
     }
 
     private var synopsis: String {
@@ -71,7 +207,7 @@ struct EpisodeDetailView: View {
     }
 
     private var topImage: some View {
-        AsyncImage(url: topImageURL) { phase in
+        CachedAsyncImage(url: topImageURL) { phase in
             switch phase {
             case .success(let image):
                 image.resizable().scaledToFill()
@@ -87,18 +223,6 @@ struct EpisodeDetailView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 220)
         .clipped()
-        .overlay(alignment: .bottomLeading) {
-            if show?.providerLogoPath != nil || show?.providerName != nil {
-                // Lower-left of the header image, 200% of the base badge size.
-                ProviderBadge(
-                    logoPath: show?.providerLogoPath,
-                    name: show?.providerName,
-                    size: 48,
-                    isNetworkLogo: show?.providerIsNetworkLogo ?? false
-                )
-                .padding(12)
-            }
-        }
         .overlay(alignment: .topTrailing) {
             if let milestone = episode.episodeMilestone {
                 EpisodeTypeChit(text: milestone).padding(12)
@@ -147,35 +271,47 @@ struct ShowDetailView: View {
             .font(.title2.bold())
             .padding(.top, 16)
 
-        if upcoming.isEmpty {
+        if upcomingByDay.isEmpty {
             Text("No upcoming episodes scheduled.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         } else {
-            VStack(alignment: .leading, spacing: 16) {
-                ForEach(upcoming) { episode in
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            if let day = episode.localAirDay {
-                                Text(Self.dateLabel(for: day))
-                                    .font(.headline.weight(.medium))
+            VStack(alignment: .leading, spacing: 20) {
+                ForEach(upcomingByDay, id: \.day) { group in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(Self.dateLabel(for: group.day))
+                            .font(.headline.weight(.medium))
+                        ForEach(group.episodes) { episode in
+                            HStack(spacing: 10) {
+                                Text(subtitle(for: episode))
+                                    .font(.callout.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                Spacer(minLength: 8)
+                                if let milestone = episode.episodeMilestone {
+                                    EpisodeTypeChit(text: milestone)
+                                }
                             }
-                            Text(subtitle(for: episode))
-                                .font(.callout.weight(.medium))
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 8)
-                        if let milestone = episode.episodeMilestone {
-                            EpisodeTypeChit(text: milestone)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
     }
 
-    private var upcoming: [Episode] { show.upcomingEpisodes }
+    /// Upcoming episodes grouped by local air day (days ascending), each day's
+    /// episodes ordered lowest → highest.
+    private var upcomingByDay: [(day: Date, episodes: [Episode])] {
+        let cal = Calendar.current
+        let buckets = Dictionary(grouping: show.upcomingEpisodes) { ep in
+            ep.localAirDay.map { cal.startOfDay(for: $0) } ?? .distantFuture
+        }
+        return buckets
+            .map { (day: $0.key, episodes: $0.value.sorted {
+                ($0.seasonNumber, $0.episodeNumber) < ($1.seasonNumber, $1.episodeNumber)
+            }) }
+            .sorted { $0.day < $1.day }
+    }
 
     private func subtitle(for episode: Episode) -> String {
         episode.name.isEmpty
@@ -198,7 +334,7 @@ struct ShowDetailView: View {
     }
 
     private var topImage: some View {
-        AsyncImage(url: topImageURL) { phase in
+        CachedAsyncImage(url: topImageURL) { phase in
             switch phase {
             case .success(let image):
                 image.resizable().scaledToFill()
@@ -251,9 +387,10 @@ enum PreviewSample {
         show.providerName = "Netflix"
         context.insert(show)
 
+        // E5 and E6 drop the same day (a two-episode release) to exercise grouping.
         let seed: [(Int, Int, String, String, Int, String?)] = [
             (2, 5, "Static", "", 0, nil),
-            (2, 6, "Ghost Signal", "", 7, nil),
+            (2, 6, "Ghost Signal", "", 0, nil),
             (2, 7, "Blackout", "", 14, nil),
             (2, 8, "Last Call",
              "The case closes the only way it can — an old debt comes due under the neon.",
@@ -284,11 +421,19 @@ enum PreviewSample {
             ?? show.upcomingEpisodes.last
             ?? Episode(tmdbID: 0, seasonNumber: 1, episodeNumber: 1)
     }
+
+    /// The same-day episode group (E5 + E6), lowest → highest.
+    @MainActor static var episodes: [Episode] {
+        let cal = Calendar.current
+        return show.upcomingEpisodes
+            .filter { $0.localAirDay.map { cal.isDateInToday($0) } ?? false }
+            .sorted { ($0.seasonNumber, $0.episodeNumber) < ($1.seasonNumber, $1.episodeNumber) }
+    }
 }
 
 #Preview("Episode detail (from Shows)") {
     NavigationStack {
-        EpisodeDetailView(episode: PreviewSample.finaleEpisode)
+        EpisodeDetailView(episodes: PreviewSample.episodes)
     }
 }
 

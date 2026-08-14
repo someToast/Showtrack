@@ -95,12 +95,12 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     ShelfView(
                         title: "Today",
-                        episodes: todayEpisodes,
+                        groups: todayGroups,
                         emptyMessage: "Nothing airing today."
                     )
                     ShelfView(
                         title: "This Week",
-                        episodes: weekEpisodes,
+                        groups: weekGroups,
                         emptyMessage: "Nothing in the next 7 days.",
                         showsAirDate: true
                     )
@@ -125,6 +125,9 @@ struct HomeView: View {
 
     // MARK: Bucketing
 
+    private var todayGroups: [EpisodeGroup] { episodeGroups(from: todayEpisodes) }
+    private var weekGroups: [EpisodeGroup] { episodeGroups(from: weekEpisodes) }
+
     private var trackedEpisodes: [Episode] {
         episodes.filter { $0.show?.isTracking ?? false }
     }
@@ -147,6 +150,53 @@ struct HomeView: View {
             return day >= tomorrow && day < weekEnd
         }
     }
+}
+
+/// One or more episodes of the same show releasing on the same day, collapsed
+/// into a single card on the Shows tab.
+struct EpisodeGroup: Identifiable {
+    /// Same show + same day, sorted lowest → highest episode number.
+    let episodes: [Episode]
+
+    var id: PersistentIdentifier { representative.persistentModelID }
+    var representative: Episode { episodes[0] }
+    var count: Int { episodes.count }
+
+    /// The highest-priority milestone present in the set. Premieres outrank
+    /// finales, so an entire-season drop shows the premiere alone rather than
+    /// doubling it up with the finale.
+    var milestone: String? {
+        let present = Set(episodes.compactMap(\.episodeMilestone))
+        return ["Series premiere", "Season premiere", "Season finale", "Mid-season finale"]
+            .first(where: present.contains)
+    }
+}
+
+private struct DayShowKey: Hashable {
+    let show: PersistentIdentifier?
+    let day: Date?
+}
+
+/// Collapse episodes into per-show, per-day groups, sorted by day then show name.
+func episodeGroups(from episodes: [Episode]) -> [EpisodeGroup] {
+    let buckets = Dictionary(grouping: episodes) { ep in
+        DayShowKey(
+            show: ep.show?.persistentModelID,
+            day: ep.localAirDay.map { Calendar.current.startOfDay(for: $0) }
+        )
+    }
+    return buckets.values
+        .map { eps in
+            EpisodeGroup(episodes: eps.sorted {
+                ($0.seasonNumber, $0.episodeNumber) < ($1.seasonNumber, $1.episodeNumber)
+            })
+        }
+        .sorted { lhs, rhs in
+            let l = lhs.representative.localAirDay ?? .distantFuture
+            let r = rhs.representative.localAirDay ?? .distantFuture
+            if l != r { return l < r }
+            return (lhs.representative.show?.name ?? "") < (rhs.representative.show?.name ?? "")
+        }
 }
 
 #Preview {
