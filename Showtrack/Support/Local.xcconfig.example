@@ -1,0 +1,8 @@
+// Copy this file to `Local.xcconfig` (same folder) and set your Apple Developer
+// Team ID below. `Local.xcconfig` is gitignored, so your Team ID never lands in
+// the public repo or in project.pbxproj.
+//
+// Without it the app still builds unsigned for the Simulator; set it to run on
+// a physical device. Find your Team ID in Xcode → Settings → Accounts, or at
+// developer.apple.com → Membership.
+DEVELOPMENT_TEAM =

@@ -10,3 +10,6 @@ DerivedData/
 
 # Secrets — real API keys never committed
 Showtrack/Services/Secrets.swift
+
+# Local signing config (Apple Team ID) — never committed
+Showtrack/Support/Local.xcconfig
