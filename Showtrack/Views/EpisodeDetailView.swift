@@ -188,6 +188,7 @@ private struct EpisodeDetailPage: View {
             }
             .padding(.bottom, 24)
         }
+        .scrollIndicators(.hidden)
         .onScrollGeometryChange(for: CGFloat.self) { geo in
             geo.contentOffset.y + geo.contentInsets.top
         } action: { _, scrolled in
@@ -261,6 +262,7 @@ struct ShowDetailView: View {
             }
             .padding(.bottom, 24)
         }
+        .scrollIndicators(.hidden)
         .navigationTitle(show.name)
         .navigationBarTitleDisplayMode(.inline)
     }

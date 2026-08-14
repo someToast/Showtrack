@@ -69,6 +69,7 @@ struct LibraryView: View {
                 }
             }
             .listStyle(.plain)
+            .scrollIndicators(.hidden)
             .overlay(alignment: .trailing) {
                 AlphaIndex(letters: sections.map(\.letter)) { letter in
                     proxy.scrollTo(letter, anchor: .top)

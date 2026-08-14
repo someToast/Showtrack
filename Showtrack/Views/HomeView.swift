@@ -107,6 +107,7 @@ struct HomeView: View {
                 }
                 .padding(.vertical)
             }
+            .scrollIndicators(.hidden)
             .navigationTitle("Showtrack")
             .overlay {
                 if shows.isEmpty {

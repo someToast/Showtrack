@@ -30,6 +30,9 @@ struct AddShowView: View {
     @State private var recognitionNote: String?
     @State private var scannedLines: [String] = []
     @State private var showingCamera = false
+    /// Drives the search field's focus/keyboard. Raised on the Add tab so the
+    /// user can start typing immediately.
+    @State private var searchPresented = false
 
     var body: some View {
         NavigationStack {
@@ -63,8 +66,9 @@ struct AddShowView: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             .overlay { statusOverlay }
-            .searchable(text: $query, prompt: "Search TV shows")
+            .searchable(text: $query, isPresented: $searchPresented, prompt: "Search TV shows")
             .onSubmit(of: .search) { Task { await search() } }
             .navigationTitle("Add Show")
             .navigationBarTitleDisplayMode(.inline)
@@ -82,7 +86,12 @@ struct AddShowView: View {
                 .ignoresSafeArea()
             }
             .task {
-                if let initialImage { await handleCaptured(initialImage) }
+                if let initialImage {
+                    await handleCaptured(initialImage)
+                } else {
+                    // Manual add (the Add tab): focus search and raise the keyboard.
+                    searchPresented = true
+                }
             }
         }
     }
