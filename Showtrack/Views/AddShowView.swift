@@ -29,7 +29,6 @@ struct AddShowView: View {
     @State private var errorMessage: String?
     @State private var recognitionNote: String?
     @State private var scannedLines: [String] = []
-    @State private var showingCamera = false
     /// Drives the search field's focus/keyboard. Raised on the Add tab so the
     /// user can start typing immediately.
     @State private var searchPresented = false
@@ -79,12 +78,6 @@ struct AddShowView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showingCamera) {
-                CameraPicker { image in
-                    Task { await handleCaptured(image) }
-                }
-                .ignoresSafeArea()
-            }
             .task {
                 if let initialImage {
                     await handleCaptured(initialImage)
@@ -112,15 +105,7 @@ struct AddShowView: View {
             ContentUnavailableView {
                 Label("Add a show", systemImage: "tv")
             } description: {
-                Text("Search by show name or scan the show’s info screen on your TV with the camera.")
-            } actions: {
-                Button {
-                    showingCamera = true
-                } label: {
-                    Label("Scan from TV", systemImage: "camera.viewfinder")
-                }
-                .buttonStyle(.borderedProminent)
-                .scaleEffect(1.1)
+                Text("Search by show name.")
             }
         } else if results.isEmpty {
             ContentUnavailableView.search(text: searchedQuery)
