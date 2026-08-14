@@ -14,7 +14,9 @@ struct ShowImporter {
     /// v6: negated network wordmark tile when no provider tile (FOX, CBS).
     /// v7: exact-only provider match (FOX≠Fox One; HBO now uses its wordmark).
     /// v8: brand alias so "Prime Video" network matches "Amazon Prime Video" tile.
-    static let metadataVersion = 8
+    /// v9: only platform "… Channel" add-ons are resellers, so standalone services
+    ///     like "The Roku Channel" keep their real tile.
+    static let metadataVersion = 9
 
     let context: ModelContext
 
@@ -169,18 +171,20 @@ struct ShowImporter {
     }
 
     /// Normalized brand `base` + rank for a provider name:
-    /// 0 = core service, 1 = paid tier (Premium/Essential/…), 2 = reseller
-    /// (name contains "Channel", e.g. "… Amazon Channel", "… on The Roku Channel").
+    /// 0 = core service, 1 = paid tier (Premium/Essential/…), 2 = reseller bought
+    /// as an add-on through a platform ("… Amazon Channel", "… Apple TV Channel",
+    /// "… Roku Premium Channel"). The bare word "Channel" is *not* a reseller
+    /// marker — standalone services like "The Roku Channel" or "Criterion Channel"
+    /// keep their own tiles.
     private static func classify(_ name: String) -> (base: String, rank: Int) {
         var base = name.lowercased()
-        let isReseller = base.contains("channel")
-        if isReseller {
-            for phrase in ["amazon channel", "apple tv channel", "roku premium channel",
-                           "premium channel", "channel"] {
-                if let range = base.range(of: phrase) {
-                    base = String(base[..<range.lowerBound])
-                    break
-                }
+        var isReseller = false
+        for phrase in ["amazon channel", "apple tv channel", "roku premium channel",
+                       "premium channel"] {
+            if let range = base.range(of: phrase) {
+                base = String(base[..<range.lowerBound])
+                isReseller = true
+                break
             }
         }
         base = base.trimmingCharacters(in: .whitespaces)
