@@ -74,6 +74,7 @@ struct CameraPicker: UIViewControllerRepresentable {
             label.textColor = .white
             label.font = .preferredFont(forTextStyle: .subheadline)
             label.numberOfLines = 0
+            label.textAlignment = .center
             label.translatesAutoresizingMaskIntoConstraints = false
 
             banner.addSubview(label)
@@ -141,7 +142,9 @@ struct CameraPicker: UIViewControllerRepresentable {
             // Reader-horizontal length available within the viewfinder.
             let availLength = isLandscape ? preview.height : preview.width
             let maxContent = max(120, availLength - 2 * margin)
-            label.preferredMaxLayoutWidth = maxContent - hInset * 2
+            let maxLabel = maxContent - hInset * 2
+            label.preferredMaxLayoutWidth = Self.balancedWidth(
+                for: label.text ?? "", font: label.font, maxWidth: maxLabel)
             let size = banner.systemLayoutSizeFitting(
                 CGSize(width: maxContent, height: 0),
                 withHorizontalFittingPriority: .fittingSizeLevel,
@@ -171,6 +174,28 @@ struct CameraPicker: UIViewControllerRepresentable {
             } else {
                 apply()
             }
+        }
+
+        /// The narrowest width that still wraps `text` to the same number of lines
+        /// as `maxWidth` — which evens out the line lengths (poor man's
+        /// `text-wrap: balance`). Returns `maxWidth` when it fits on one line.
+        private static func balancedWidth(for text: String, font: UIFont, maxWidth: CGFloat) -> CGFloat {
+            guard !text.isEmpty, maxWidth > 0 else { return maxWidth }
+            func lineCount(_ width: CGFloat) -> Int {
+                let rect = (text as NSString).boundingRect(
+                    with: CGSize(width: width, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    attributes: [.font: font], context: nil)
+                return max(1, Int((rect.height / font.lineHeight).rounded()))
+            }
+            let target = lineCount(maxWidth)
+            guard target > 1 else { return maxWidth }
+            var lo: CGFloat = 0, hi = maxWidth
+            while hi - lo > 1 {
+                let mid = (lo + hi) / 2
+                if lineCount(mid) <= target { hi = mid } else { lo = mid }
+            }
+            return hi
         }
 
         private static func screenBounds() -> CGRect {
